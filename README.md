@@ -1,8 +1,10 @@
-# 下一场 · 防剧透赛事回放
+# 无剧透回放 · Spoiler-Free Replays
 
 选一场比赛，像看直播一样，从第一局看起。
 
-「下一场」在本机运行，首个支持来源是 **B 站英雄联盟赛事**。打开比赛列表，点击刷新，再选择比赛直接观看；不用自行搜索、粘贴链接或输入 BV 号。
+「无剧透回放」在本机运行，首个支持来源是 **B 站英雄联盟赛事**。打开比赛列表，点击刷新，再选择比赛直接观看；不用自行搜索、粘贴链接或输入 BV 号。
+
+**本项目开源、免费，不盈利。** 原创代码采用 MIT 许可证，欢迎使用、改进和分享。
 
 - **不提前透露结果**：列表只显示对阵、赛事和日期，不展示比分、封面、视频时长或总局数。
 - **保留观看的悬念**：没有进度条、倍速和弹幕，正片结束后自动接下一局。
@@ -10,7 +12,7 @@
 
 **无需 API Key，也无需配置 AI 工具。** 当前流程直接读取公开元数据并按固定规则识别比赛。视频画面、记分牌和解说本身仍可能透露比赛信息。
 
-[观看演示视频](https://github.com/cooleryu/next-match/releases/download/v0.1.0-preview/next-match-demo.mp4) · [GitHub 仓库](https://github.com/cooleryu/next-match)
+[观看演示视频](https://github.com/cooleryu/spoiler-free-replays/releases/download/v0.1.1-preview/spoiler-free-replays-demo.mp4) · [GitHub 仓库](https://github.com/cooleryu/spoiler-free-replays)
 
 > **v0.1 早期预览。** 已核验五场 2026 全球总决赛的作者、标题和正片分局，并附带这五场的初始名单。它不是完整赛程。2026-10-20 实测既遇到过搜索验证，也成功刷新到新比赛；自动刷新仍受上游可用性影响，页面会区分初始名单和成功刷新的列表。
 
@@ -19,8 +21,8 @@
 需要 Node.js **22.12 或更新版本**，建议使用 Node.js 24。
 
 ```sh
-git clone https://github.com/cooleryu/next-match.git
-cd next-match
+git clone https://github.com/cooleryu/spoiler-free-replays.git
+cd spoiler-free-replays
 npm ci --ignore-scripts
 npm run dev
 ```

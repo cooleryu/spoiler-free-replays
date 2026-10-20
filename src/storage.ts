@@ -9,6 +9,7 @@ export interface SavedReplay {
   currentIndex: number;
 }
 
+// Keep the original key so renaming the project preserves existing local viewing state.
 export const STORAGE_KEY = 'next-match.replay.v1';
 
 export function isSegment(value: unknown): value is Segment {

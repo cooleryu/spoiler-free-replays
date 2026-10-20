@@ -177,7 +177,7 @@ export default function App() {
   return (
     <div className={`app-shell ${phase === 'playing' ? 'watching' : ''}`}>
       <header className="site-header">
-        <div className="site-identity"><a className="wordmark" href="/" aria-label="下一场首页"><Icon name="play" /><span>下一场</span></a><span className="header-note">赛事回放</span></div>
+        <div className="site-identity"><a className="wordmark" href="/" aria-label="无剧透回放首页"><Icon name="play" /><span>无剧透回放</span></a><span className="header-note">开源免费</span></div>
         <Auth onSessionChange={() => setPlaybackVersion(value => value + 1)} />
       </header>
       <main>
@@ -213,7 +213,7 @@ export default function App() {
           <div className="playback-area"><button className="text-button outside-button" type="button" onClick={returnToList}><span className="back-arrow"><Icon name="arrow" /></span>返回比赛列表</button><span className="keyboard-hint"><kbd>←</kbd><kbd>→</kbd> 微调 5 秒<span className="hint-separator" />空格键播放 / 暂停</span></div>
         ) : null}
       </main>
-      {phase !== 'playing' && <footer className="site-footer"><span>下一场 · 本地观赛</span><span>视频来自哔哩哔哩</span></footer>}
+      {phase !== 'playing' && <footer className="site-footer"><span>无剧透回放 · 开源免费</span><span>视频来自哔哩哔哩</span></footer>}
     </div>
   );
 }
