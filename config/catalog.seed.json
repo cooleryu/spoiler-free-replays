@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "creatorMid": 50329118,
+  "query": "2026全球总决赛",
+  "updatedAt": "2026-10-20T07:58:24.491Z",
+  "matches": [
+    {
+      "id": "BV1STnL6LEiW",
+      "date": "2026-10-19",
+      "event": "2026全球总决赛",
+      "home": "KC",
+      "away": "MVK",
+      "publishedAt": 1792349658
+    },
+    {
+      "id": "BV15VJ66sEvH",
+      "date": "2026-10-18",
+      "event": "2026全球总决赛",
+      "home": "MVK",
+      "away": "FUR",
+      "publishedAt": 1792264056
+    },
+    {
+      "id": "BV1LoJh6PENc",
+      "date": "2026-10-17",
+      "event": "2026全球总决赛",
+      "home": "C9",
+      "away": "FUR",
+      "publishedAt": 1792187329
+    },
+    {
+      "id": "BV1y8JS6eEtZ",
+      "date": "2026-10-16",
+      "event": "2026全球总决赛",
+      "home": "FUR",
+      "away": "MVK",
+      "publishedAt": 1792108681
+    },
+    {
+      "id": "BV1qrJm6EE6J",
+      "date": "2026-10-16",
+      "event": "2026全球总决赛",
+      "home": "C9",
+      "away": "KC",
+      "publishedAt": 1792091107
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.local/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+test-results/
+playwright-report/
+.DS_Store
+
+# Local previews can contain third-party video frames or temporary login QR codes.
+/*preview*.jpg
+/*preview*.jpeg
+/*preview*.png
+/*preview*.webp
+/*-screenshot*.jpg
+/*-screenshot*.png
+/screenshots/
