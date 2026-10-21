@@ -6,13 +6,19 @@
 
 **本项目开源、免费，不盈利。** 原创代码采用 MIT 许可证，欢迎使用、改进和分享。
 
+<p>
+  <a href="docs/images/01-match-list.png"><img src="docs/images/01-match-list.png" width="32%" alt="比赛列表"></a>
+  <a href="docs/images/02-watch.png"><img src="docs/images/02-watch.png" width="32%" alt="沉浸观看"></a>
+  <a href="docs/images/03-small-seek.png"><img src="docs/images/03-small-seek.png" width="32%" alt="有限跳转"></a>
+</p>
+
+[GitHub 仓库](https://github.com/cooleryu/spoiler-free-replays)
+
 - **不提前透露结果**：列表只显示对阵、赛事和日期，不展示比分、封面、视频时长或总局数。
 - **保留观看的悬念**：没有进度条、倍速和弹幕，正片结束后自动接下一局。
 - **允许小幅调整**：每次前后跳转 5、30 或 60 秒，保留暂停、音量和全屏。
 
 **无需 API Key，也无需配置 AI 工具。** 当前流程直接读取公开元数据并按固定规则识别比赛。视频画面、记分牌和解说本身仍可能透露比赛信息。
-
-[观看演示视频](https://github.com/cooleryu/spoiler-free-replays/releases/download/v0.1.1-preview/spoiler-free-replays-demo.mp4) · [GitHub 仓库](https://github.com/cooleryu/spoiler-free-replays)
 
 > **v0.1 早期预览。** 已核验五场 2026 全球总决赛的作者、标题和正片分局，并附带这五场的初始名单。它不是完整赛程。2026-10-20 实测既遇到过搜索验证，也成功刷新到新比赛；自动刷新仍受上游可用性影响，页面会区分初始名单和成功刷新的列表。
 
