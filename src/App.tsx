@@ -66,6 +66,8 @@ export default function App() {
   const [watchError, setWatchError] = useState('');
   const [playbackMessage, setPlaybackMessage] = useState('');
   const [playbackVersion, setPlaybackVersion] = useState(0);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [loginRequest, setLoginRequest] = useState(0);
   const catalogRequest = useRef<AbortController | null>(null);
   const watchRequest = useRef<AbortController | null>(null);
   const { phase, segments, currentIndex } = replay;
@@ -180,7 +182,7 @@ export default function App() {
     <div className={`app-shell ${phase === 'playing' ? 'watching' : ''}`}>
       <header className="site-header">
         <div className="site-identity"><a className="wordmark" href="/" aria-label="无剧透回放首页"><Icon name="play" /><span>无剧透回放</span></a><span className="header-note">开源免费</span></div>
-        <Auth onSessionChange={() => setPlaybackVersion(value => value + 1)} />
+        <Auth onStatus={setLoggedIn} loginRequest={loginRequest} onSessionChange={value => { setLoggedIn(value); setPlaybackVersion(version => version + 1); }} />
       </header>
       <main>
         {phase === 'playing' && <div className="viewer-heading">
@@ -209,7 +211,7 @@ export default function App() {
           {phase === 'ready' && (
             <div className="viewer-content state-content"><div className="ready-mark" aria-hidden="true"><Icon name="play" /></div><h1 role="status">已准备好</h1><p className="viewer-description">已保留你上次观看的比赛片段。</p><button className="primary-button start-button" type="button" disabled={catalogLoading} onClick={() => setReplay((value) => ({ ...value, phase: 'playing' }))}><Icon name="play" />开始观看</button><button className="text-button ready-reset" type="button" onClick={returnToList}>返回比赛列表</button></div>
           )}
-          {phase === 'playing' && <Player segment={segments[currentIndex]} playbackVersion={playbackVersion} onEnded={segmentEnded} completionMessage={playbackMessage} onPlaying={() => setPlaybackMessage('')} />}
+          {phase === 'playing' && <Player segment={segments[currentIndex]} playbackVersion={playbackVersion} loggedIn={loggedIn} onRequestLogin={() => setLoginRequest(value => value + 1)} onEnded={segmentEnded} completionMessage={playbackMessage} onPlaying={() => setPlaybackMessage('')} />}
         </section>
         {phase === 'playing' ? (
           <div className="playback-area"><button className="text-button outside-button" type="button" onClick={returnToList}><span className="back-arrow"><Icon name="arrow" /></span>返回比赛列表</button><span className="keyboard-hint"><kbd>←</kbd><kbd>→</kbd> 微调 5 秒<span className="hint-separator" />空格键播放 / 暂停</span></div>

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createReplayServer } from '../server/index';
 
+const qualities = [{ quality: 64, label: '720P 准高清', available: true, requiresLogin: false, requiresVip: false }];
 const PORT = 44321;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
@@ -33,7 +34,8 @@ test('web login routes are local, bounded, private, and independent of the catal
     },
     playback: async (_segment, _signal, dependencies) => {
       assert.deepEqual(dependencies?.headers, loggedIn ? { Cookie: fakeSecret } : {});
-      return { url: 'https://fixture.bilivideo.com/video.mp4' };
+      assert.equal(dependencies?.loggedIn, loggedIn);
+      return { url: 'https://fixture.bilivideo.com/video.mp4', quality: 64, qualities };
     },
   });
   t.after(() => { release(); return app.close(); });
@@ -59,7 +61,7 @@ test('web login routes are local, bounded, private, and independent of the catal
     assert.deepEqual(await (await fetch(`${ORIGIN}/api/auth/status`)).json(), { loggedIn: true });
   } finally { release(); await pendingCatalog; }
   const source = await post('/api/playback', segment);
-  assert.deepEqual(await source.json(), { status: 'ready', url: 'https://fixture.bilivideo.com/video.mp4' });
+  assert.deepEqual(await source.json(), { status: 'ready', url: 'https://fixture.bilivideo.com/video.mp4', quality: 64, qualities });
   assert.deepEqual(await (await post('/api/auth/logout', {})).json(), { status: 'ok' });
   assert.deepEqual(await (await fetch(`${ORIGIN}/api/auth/status`)).json(), { loggedIn: false });
   assert.equal((await post('/api/playback', segment)).status, 200);

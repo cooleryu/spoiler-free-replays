@@ -25,7 +25,13 @@ export function AuthDialog({ phase, session, onClose, onRetry, dialogRef }: Dial
   </div>;
 }
 
-export default function Auth({ onSessionChange }: { onSessionChange: () => void }) {
+interface AuthProps {
+  onSessionChange: (loggedIn: boolean) => void;
+  onStatus?: (loggedIn: boolean) => void;
+  loginRequest?: number;
+}
+
+export default function Auth({ onSessionChange, onStatus, loginRequest = 0 }: AuthProps) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [statusLoading, setStatusLoading] = useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
@@ -42,6 +48,9 @@ export default function Auth({ onSessionChange }: { onSessionChange: () => void 
   const expiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const changeCallback = useRef(onSessionChange);
   changeCallback.current = onSessionChange;
+  const statusCallback = useRef(onStatus);
+  statusCallback.current = onStatus;
+  const handledLoginRequest = useRef(loginRequest);
 
   function cancelRemote(id: string) { void authPost('cancel', { sessionId: id }, undefined, true).catch(() => {}); }
   function stop(cancelSession = true) {
@@ -61,7 +70,11 @@ export default function Auth({ onSessionChange }: { onSessionChange: () => void 
       try {
         const response = await fetch('/api/auth/status', { signal: controller.signal });
         const data: unknown = await response.json();
-        if (!controller.signal.aborted && response.ok && data && typeof data === 'object' && typeof (data as Record<string, unknown>).loggedIn === 'boolean') setLoggedIn((data as { loggedIn: boolean }).loggedIn);
+        if (!controller.signal.aborted && response.ok && data && typeof data === 'object' && typeof (data as Record<string, unknown>).loggedIn === 'boolean') {
+          const currentStatus = (data as { loggedIn: boolean }).loggedIn;
+          setLoggedIn(currentStatus);
+          statusCallback.current?.(currentStatus);
+        }
       } catch { /* Login remains optional when status is temporarily unavailable. */ }
       finally { if (!controller.signal.aborted) setStatusLoading(false); }
     })();
@@ -127,7 +140,7 @@ export default function Auth({ onSessionChange }: { onSessionChange: () => void 
           const status = readQrStatus(await authPost('poll', { sessionId: result.sessionId }, controller.signal));
           if (!isCurrent()) return;
           if (status === 'ready') {
-            stop(false); setLoggedIn(true); setSession(null); setOpen(false); changeCallback.current();
+            stop(false); setLoggedIn(true); setSession(null); setOpen(false); changeCallback.current(true);
           } else if (status === 'expired') expire();
           else if (status === 'waiting' || status === 'scanned') { setPhase(status); schedule(); }
           else throw new Error('INVALID_STATUS');
@@ -151,10 +164,17 @@ export default function Auth({ onSessionChange }: { onSessionChange: () => void 
       const result = await authPost('logout', {}, controller.signal);
       if (controller.signal.aborted) return;
       if (!result || typeof result !== 'object' || (result as Record<string, unknown>).status !== 'ok') throw new Error('INVALID_STATUS');
-      setLoggedIn(false); changeCallback.current();
+      setLoggedIn(false); changeCallback.current(false);
     } catch { if (!controller.signal.aborted) setError('暂时未能退出，请重试。'); }
     finally { if (logoutRequest.current === controller) { logoutRequest.current = null; setLogoutLoading(false); } }
   }
+
+  useEffect(() => {
+    if (loginRequest <= handledLoginRequest.current || statusLoading || logoutLoading) return;
+    handledLoginRequest.current = loginRequest;
+    // Only a new external request opens login; preserve an already-open QR session.
+    if (!loggedIn && !open) void start();
+  }, [loginRequest, statusLoading, logoutLoading, loggedIn, open]);
 
   return <div className="auth-entry">
     {loggedIn ? <><span className="auth-logged-in">已登录</span><button className="auth-header-button" type="button" disabled={logoutLoading} onClick={() => void logout()}>{logoutLoading ? '退出中' : '退出登录'}</button></> : <button className="auth-header-button" type="button" disabled={statusLoading} onClick={() => void start()} aria-haspopup="dialog">登录提升画质</button>}

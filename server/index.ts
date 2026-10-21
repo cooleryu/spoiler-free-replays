@@ -10,6 +10,7 @@ import { MatchCatalog } from './catalog';
 import { resolvePlayback, ALLOWED_MEDIA_HOST_SUFFIXES } from './playback';
 import { root } from './paths';
 import { ReplayAuth } from './auth';
+import { createMediaRelay } from './media-relay';
 import sourceConfig from '../config/source.json';
 import catalogService from '../config/catalog-service.json';
 
@@ -36,14 +37,17 @@ export async function createReplayServer(options: { port?: number; production?: 
   const catalog = options.catalog ?? new MatchCatalog({ catalogUrl: configuredCatalogUrl() });
   const playback = options.playback ?? resolvePlayback;
   const auth = options.auth ?? new ReplayAuth();
+  const mediaRelay = createMediaRelay();
   const authRequests = new Map<AbortController, Promise<void>>();
   const mediaSources = ALLOWED_MEDIA_HOST_SUFFIXES.map(suffix => `https://*${suffix}`).join(' ');
   const server = createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Content-Security-Policy', `default-src 'self'; frame-src 'none'; media-src ${mediaSources}; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`);
+    res.setHeader('Content-Security-Policy', `default-src 'self'; frame-src 'none'; media-src ${mediaSources} blob:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' blob: ${mediaSources} ws://127.0.0.1:* ws://localhost:*; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`);
     if (!allowedRequest(req, port, req.method !== 'GET' && req.method !== 'HEAD')) { json(res, 403, { status: 'error', code: 'INVALID_INPUT' }); return; }
+    const mediaId = req.url?.match(/^\/api\/media\/([A-Za-z0-9_-]{32})$/)?.[1];
+    if (mediaId) { await mediaRelay.serve(mediaId, req, res); return; }
     if (req.url === '/api/auth/status' && req.method === 'GET') {
       json(res, 200, { loggedIn: auth.status().loggedIn }); return;
     }
@@ -60,7 +64,7 @@ export async function createReplayServer(options: { port?: number; production?: 
           let result: unknown;
           if (authOperation === 'start' || authOperation === 'logout') {
             if (!z.object({}).strict().safeParse(raw).success) throw new ReplayError('INVALID_INPUT');
-            if (authOperation === 'logout') { auth.logout(); result = { status: 'ok' }; }
+            if (authOperation === 'logout') { auth.logout(); mediaRelay.clear(); result = { status: 'ok' }; }
             else {
               const login = await auth.start(controller.signal);
               result = { sessionId: login.sessionId, qrImage: login.qrImage, expiresAt: login.expiresAt };
@@ -69,7 +73,7 @@ export async function createReplayServer(options: { port?: number; production?: 
             const body = z.object({ sessionId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/) }).strict().safeParse(raw);
             if (!body.success) throw new ReplayError('INVALID_INPUT');
             if (authOperation === 'cancel') { auth.cancel(body.data.sessionId); result = { status: 'ok' }; }
-            else { const polled = await auth.poll(body.data.sessionId, controller.signal); result = { status: polled.status }; }
+            else { const polled = await auth.poll(body.data.sessionId, controller.signal); if (polled.status === 'ready') mediaRelay.clear(); result = { status: polled.status }; }
           }
           if (controller.signal.aborted) throw new ReplayError(controller.signal.reason === 'TIMEOUT' ? 'TIMEOUT' : 'CANCELLED');
           json(res, 200, result);
@@ -104,12 +108,26 @@ export async function createReplayServer(options: { port?: number; production?: 
             if (!body.success) throw new ReplayError('INVALID_INPUT');
             result = { status: 'ready', segments: await catalog.watch(body.data.matchId, controller.signal) };
           } else {
-            const body = segmentSchema.safeParse(await readJson(req));
+            const body = segmentSchema.extend({ quality: z.number().int().refine(value => [16, 32, 64, 74, 80, 112, 116, 120, 125, 126, 127].includes(value)).optional() }).strict().safeParse(await readJson(req));
             if (!body.success) throw new ReplayError('INVALID_INPUT');
             const verified = await catalog.watch(body.data.bvid, controller.signal);
             if (!verified.some(segment => segment.bvid === body.data.bvid && segment.cid === body.data.cid && segment.page === body.data.page)) throw new ReplayError('MATCH_UNAVAILABLE');
-            const source = await playback(body.data, controller.signal, { headers: auth.headers() });
-            result = { status: 'ready', url: source.url };
+            const loggedIn = auth.status().loggedIn;
+            if ((body.data.quality ?? 64) > 64 && !loggedIn) throw new ReplayError('BILIBILI_LOGIN');
+            const source = await playback({ bvid: body.data.bvid, cid: body.data.cid, page: body.data.page }, controller.signal,
+              { headers: auth.headers(), loggedIn, quality: body.data.quality });
+            // Only URLs already validated by resolvePlayback can be registered. Never accept a client-supplied address.
+            const manifest = source.manifest?.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (_match, encoded: string) => {
+              const address = encoded.replace(/&(amp|quot|apos|lt|gt);/g, (_entity, name: string) =>
+                ({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' })[name]!);
+              const id = mediaRelay.register(address);
+              return `<BaseURL>http://${req.headers.host}/api/media/${id}</BaseURL>`;
+            });
+            result = { status: 'ready', ...(source.url ? { url: source.url } : {}),
+              ...(manifest ? { manifest } : {}),
+              ...(source.quality !== undefined ? { quality: source.quality } : {}),
+              ...(source.qualities ? { qualities: source.qualities.map(({ quality, label, available, requiresLogin, requiresVip }) =>
+                ({ quality, label, available, requiresLogin, requiresVip })) } : {}) };
           }
           if (controller.signal.aborted) throw new ReplayError(controller.signal.reason === 'TIMEOUT' ? 'TIMEOUT' : 'CANCELLED');
           json(res, 200, result);
@@ -152,6 +170,7 @@ export async function createReplayServer(options: { port?: number; production?: 
     listen: () => new Promise<void>((done, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', done); }),
     close: async () => {
       auth.close();
+      mediaRelay.close();
       for (const controller of authRequests.keys()) controller.abort('CANCELLED');
       active?.abort('CANCELLED'); server.closeAllConnections();
       await Promise.allSettled(authRequests.values());

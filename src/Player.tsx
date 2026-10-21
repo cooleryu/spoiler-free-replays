@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { lockNormalRate, playerShortcut, requestPlayback, SEEK_STEPS, seekTarget, type SeekStep } from './player-controls';
+import { lockNormalRate, playerShortcut, SEEK_STEPS, seekTarget, type SeekStep } from './player-controls';
+import { QualityMenu, type QualityOption } from './QualityMenu';
+import { PlaybackRequestError, requestPlaybackSource } from './playback-client';
+import { attachDash } from './dash-playback';
 import type { Segment } from './storage';
 
 type Connection = 'loading' | 'ready' | 'error';
-interface Props { segment: Segment; onEnded: () => void; completionMessage?: string; onPlaying?: () => void; playbackVersion?: number }
+interface Props { segment: Segment; onEnded: () => void; completionMessage?: string; onPlaying?: () => void; playbackVersion?: number; loggedIn?: boolean; onRequestLogin?: () => void }
 
 export function decodedQuality(height: number): string | null {
   return Number.isSafeInteger(height) && height > 0 && height <= 16384 ? `${height}p` : null;
@@ -27,13 +30,18 @@ function SeekIcon({ seconds, forward = false }: { seconds: number; forward?: boo
   </svg>;
 }
 
-export default function Player({ segment, onEnded, completionMessage = '', onPlaying, playbackVersion = 0 }: Props) {
+export default function Player({ segment, onEnded, completionMessage = '', onPlaying, playbackVersion = 0, loggedIn = false, onRequestLogin }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const request = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const sourceVersion = useRef(0);
   const authVersion = useRef(playbackVersion);
+  const authenticated = useRef(loggedIn);
+  const requestedQuality = useRef(loggedIn ? 80 : 64);
+  const explicitQuality = useRef(false);
+  const dash = useRef<{ destroy: () => void } | null>(null);
+  const usingDash = useRef(false);
   const sourceAssigned = useRef(false);
   const sourceUrl = useRef('');
   const automaticRetryUsed = useRef(false);
@@ -54,16 +62,20 @@ export default function Player({ segment, onEnded, completionMessage = '', onPla
   const [fullscreen, setFullscreen] = useState(false);
   const [controlMessage, setControlMessage] = useState('');
   const [quality, setQuality] = useState<string | null>(null);
+  const [sourceQuality, setSourceQuality] = useState(64);
+  const [qualityOptions, setQualityOptions] = useState<QualityOption[]>([]);
   const [seekSeconds, setSeekSeconds] = useState<5 | 30 | 60>(5);
 
   function setIntent(value: boolean) { desiredPlaying.current = value; setIntendsPlay(value); }
 
   async function connect(selected: Segment, epoch: number, position: number) {
-    sourceVersion.current++;
+    const version = ++sourceVersion.current;
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
     sourceAssigned.current = false;
+    dash.current?.destroy(); dash.current = null;
+    usingDash.current = false;
     restorePosition.current = position;
     lastPosition.current = position;
     setConnection('loading');
@@ -73,16 +85,33 @@ export default function Player({ segment, onEnded, completionMessage = '', onPla
     const media = video.current;
     if (media) { media.pause(); media.removeAttribute('src'); media.load(); }
     try {
-      const url = await requestPlayback(selected, controller.signal);
+      const wanted = authenticated.current ? requestedQuality.current : Math.min(requestedQuality.current, 64);
+      const source = await requestPlaybackSource(selected, controller.signal, wanted);
       if (controller.signal.aborted || generation.current !== epoch || request.current !== controller) return;
       const current = video.current;
       if (!current) return;
-      sourceUrl.current = url;
+      setQualityOptions(source.qualities);
+      setSourceQuality(source.quality);
+      if (source.quality !== wanted) setControlMessage(`所选画质暂不可用，正在播放${source.qualities.find(option => option.quality === source.quality)?.label ?? '当前可用画质'}。`);
       sourceAssigned.current = true;
-      current.src = url;
-      current.load();
-    } catch {
+      if (source.manifest) {
+        usingDash.current = true;
+        const handle = await attachDash(current, source.manifest, () => {
+          if (!controller.signal.aborted && generation.current === epoch && sourceVersion.current === version && sourceAssigned.current) mediaFailed();
+        }, controller.signal);
+        if (controller.signal.aborted || generation.current !== epoch || request.current !== controller) { handle.destroy(); return; }
+        dash.current = handle;
+      } else if (source.url) {
+        sourceUrl.current = source.url;
+        current.src = source.url;
+        current.load();
+      }
+    } catch (error) {
       if (controller.signal.aborted || generation.current !== epoch || request.current !== controller) return;
+      if (error instanceof PlaybackRequestError && error.code === 'BILIBILI_LOGIN') {
+        setConnection('error'); setControlMessage('登录状态已失效，请重新登录后选择高清画质。');
+        return;
+      }
       if (!automaticRetryUsed.current) {
         automaticRetryUsed.current = true;
         request.current = null;
@@ -110,17 +139,21 @@ export default function Player({ segment, onEnded, completionMessage = '', onPla
       request.current?.abort();
       request.current = null;
       sourceAssigned.current = false;
+      dash.current?.destroy(); dash.current = null;
       if (current) { current.pause(); current.removeAttribute('src'); current.load(); }
     };
   }, [segment.bvid, segment.cid, segment.page]);
 
   useEffect(() => {
-    if (authVersion.current === playbackVersion) return;
+    if (authVersion.current === playbackVersion && authenticated.current === loggedIn) return;
     authVersion.current = playbackVersion;
+    authenticated.current = loggedIn;
+    if (!loggedIn) { requestedQuality.current = 64; explicitQuality.current = false; }
+    else if (!explicitQuality.current) requestedQuality.current = 80;
     const position = restorePosition.current ?? (currentSource() ? video.current?.currentTime : undefined) ?? lastPosition.current;
     automaticRetryUsed.current = false;
     void connect(segmentValue.current, generation.current, Number.isFinite(position) ? position : 0);
-  }, [playbackVersion]);
+  }, [playbackVersion, loggedIn]);
 
   useEffect(() => {
     const updateFullscreen = () => setFullscreen(document.fullscreenElement === container.current);
@@ -130,6 +163,7 @@ export default function Player({ segment, onEnded, completionMessage = '', onPla
       request.current?.abort();
       request.current = null;
       sourceAssigned.current = false;
+      dash.current?.destroy(); dash.current = null;
       setIntent(false);
       video.current?.pause();
       video.current?.removeAttribute('src');
@@ -145,7 +179,23 @@ export default function Player({ segment, onEnded, completionMessage = '', onPla
   }, []);
 
   function currentSource() {
-    return sourceAssigned.current && video.current?.currentSrc === sourceUrl.current;
+    return sourceAssigned.current && (usingDash.current || video.current?.currentSrc === sourceUrl.current);
+  }
+
+  async function changeQuality(value: number) {
+    const option = qualityOptions.find(item => item.quality === value);
+    if (!option) return;
+    requestedQuality.current = value;
+    explicitQuality.current = true;
+    if (value > 64 && !loggedIn) {
+      if (document.fullscreenElement === container.current) await document.exitFullscreen().catch(() => {});
+      onRequestLogin?.();
+      return;
+    }
+    if (!option.available || value === sourceQuality) return;
+    const position = restorePosition.current ?? video.current?.currentTime ?? lastPosition.current;
+    automaticRetryUsed.current = false;
+    void connect(segmentValue.current, generation.current, Number.isFinite(position) ? position : 0);
   }
 
   function mediaFailed() {
@@ -298,7 +348,7 @@ export default function Player({ segment, onEnded, completionMessage = '', onPla
         </div>
         <div className="player-step-control"><label htmlFor="player-seek-step">每次</label><select id="player-seek-step" aria-label="跳转幅度" value={seekSeconds} onChange={event => { const value = Number(event.target.value); if (value === 5 || value === 30 || value === 60) setSeekSeconds(value); }}>{SEEK_STEPS.filter(step => step > 0).map(step => <option key={step} value={step}>{step}秒</option>)}</select></div>
         <div className="volume-control"><button className="player-icon-button" type="button" onClick={toggleMute} aria-label={muted || volume === 0 ? '取消静音' : '静音'} aria-pressed={muted}><PlayerIcon name={muted || volume === 0 ? 'muted' : 'volume'} /></button><label htmlFor="player-volume">音量</label><input id="player-volume" type="range" min="0" max="1" step="0.05" value={muted ? 0 : volume} onChange={event => changeVolume(Number(event.target.value))} aria-label="音量" /></div>
-        <div className="player-display-controls">{quality && <span className="player-quality" aria-label={`实际画质 ${quality}`}>{quality}</span>}<button className="player-icon-button fullscreen-toggle" type="button" onClick={() => void toggleFullscreen()} aria-label={fullscreen ? '退出全屏' : '全屏'}><PlayerIcon name="fullscreen" /><span>{fullscreen ? '退出全屏' : '全屏'}</span></button></div>
+        <div className="player-display-controls"><QualityMenu options={qualityOptions} currentQuality={sourceQuality} decodedLabel={quality} loggedIn={loggedIn} loading={connection === 'loading'} onSelect={value => void changeQuality(value)} /><button className="player-icon-button fullscreen-toggle" type="button" onClick={() => void toggleFullscreen()} aria-label={fullscreen ? '退出全屏' : '全屏'}><PlayerIcon name="fullscreen" /><span>{fullscreen ? '退出全屏' : '全屏'}</span></button></div>
       </div>
       {controlMessage && <p className="player-control-message" role="status">{controlMessage}</p>}
       {completionMessage && <p className="player-completion-message" role="status">{completionMessage}</p>}
