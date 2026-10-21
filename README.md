@@ -20,17 +20,32 @@ A free, open-source project focused on spoiler prevention. Its current feature i
   <a href="docs/images/03-small-seek.png"><img src="docs/images/03-small-seek.png" width="32%" alt="有限跳转"></a>
 </p>
 
-[观看界面演示（v0.1.1，无声 MP4）](https://github.com/cooleryu/spoiler-free-replays/releases/download/v0.1.1-preview/spoiler-free-replays-demo.mp4) · [开始使用](#快速开始) · [当前预览版（v0.1.2）](https://github.com/cooleryu/spoiler-free-replays/releases/tag/v0.1.2-preview) · [反馈问题](https://github.com/cooleryu/spoiler-free-replays/issues/new)
+[观看界面演示（v0.1.1，无声 MP4）](https://github.com/cooleryu/spoiler-free-replays/releases/download/v0.1.1-preview/spoiler-free-replays-demo.mp4) · [两步开始观看](#快速开始) · [当前预览版（v0.1.2）](https://github.com/cooleryu/spoiler-free-replays/releases/tag/v0.1.2-preview) · [反馈问题](https://github.com/cooleryu/spoiler-free-replays/issues/new)
 
 - **隐藏界面中的结果提示**：列表只显示对阵、赛事和日期，不展示比分、封面、视频时长或总局数。
 - **保留观看的悬念**：没有进度条、倍速和弹幕，正片结束后自动接下一局。
 - **允许小幅调整**：每次前后跳转 5、30 或 60 秒，保留暂停、音量和全屏。
 
-**无需 API Key，也无需配置 AI 工具。** 默认使用共享比赛名单，点击刷新即可获取；B 站登录和播放都在自己的电脑上完成。视频画面、记分牌和解说本身仍可能透露比赛信息。
+**观看无需 API Key，也不必配置 AI。** 可以让能运行本机项目的 AI 帮你完成首次安装和启动；打开页面后，刷新名单、选比赛即可。B 站登录是可选的画质提升入口。视频画面、记分牌和解说本身仍可能透露比赛信息。
 
 > **v0.1 早期预览。** 已核验五场 2026 全球总决赛的作者、标题和正片分局，并附带这五场的初始名单。它不是完整赛程。2026-10-20 实测既遇到过搜索验证，也成功刷新到新比赛；自动刷新仍受上游可用性影响，页面会区分初始名单和成功刷新的列表。
 
 ## 快速开始
+
+### 1. 下载项目，让 AI 帮你启动
+
+[下载项目 ZIP](https://github.com/cooleryu/spoiler-free-replays/archive/refs/heads/main.zip)，解压后，用**能运行本机项目的 AI 助手**打开这个文件夹，把下面这句话发给它：
+
+> 请按这个项目的 README 帮我准备运行环境、安装依赖并启动服务，然后在浏览器打开 http://127.0.0.1:4318。请保持本地服务运行。
+
+首次使用需要安装运行环境和依赖，可以让 AI 一并处理。启动后，打开的是你自己电脑上的网页。
+
+### 2. 首页点「刷新」，选一场比赛观看
+
+进入首页，点击「刷新」获取比赛列表，再点击想看的对阵即可观看。**首页也会自动加载一次名单，已经有比赛时可以直接点开。** 不用搜索视频、粘贴链接或输入 BV 号。
+
+<details>
+<summary>手动启动与运行说明（不使用 AI 时展开）</summary>
 
 需要 Node.js **22.12 或更新版本**，建议使用 Node.js 24。
 
@@ -41,7 +56,9 @@ npm ci --ignore-scripts
 npm run dev
 ```
 
-打开 [http://127.0.0.1:4318](http://127.0.0.1:4318)，按 `Ctrl+C` 停止服务。构建后运行：
+已经下载并解压 ZIP 的用户，可直接在项目文件夹中运行最后两条命令。
+
+打开 [http://127.0.0.1:4318](http://127.0.0.1:4318)，使用期间保持本地服务运行，按 `Ctrl+C` 停止服务。构建后运行：
 
 ```sh
 npm run build
@@ -49,6 +66,8 @@ npm start
 ```
 
 服务只监听本机。可选设置见 [.env.example](.env.example)，需要在启动服务的 shell 中设置；项目不自动读取 `.env`。
+
+</details>
 
 ## 当前回放功能的常见问题
 
@@ -62,7 +81,7 @@ npm start
 
 ### 需要 API Key 或配置 AI 工具吗？
 
-不需要。安装并启动后即可使用当前回放功能；B 站扫码登录是可选的画质提升入口，匿名观看不依赖这一步。播放是否可用及实际画质仍取决于上游返回。
+不需要。AI 只是可选的安装和启动助手，日常观看不依赖 AI；安装并启动后，刷新名单、选比赛即可。B 站扫码登录是可选的画质提升入口，匿名观看不依赖这一步。播放是否可用及实际画质仍取决于上游返回。
 
 ### 目前支持哪些比赛和视频来源？
 
