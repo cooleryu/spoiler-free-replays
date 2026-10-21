@@ -20,7 +20,7 @@ A free, open-source project focused on spoiler prevention. Its current feature i
   <a href="docs/images/03-small-seek.png"><img src="docs/images/03-small-seek.png" width="32%" alt="有限跳转"></a>
 </p>
 
-[GitHub 仓库](https://github.com/cooleryu/spoiler-free-replays) · [观看演示（v0.1.1-preview）](https://github.com/cooleryu/spoiler-free-replays/releases/tag/v0.1.1-preview)
+[观看界面演示（v0.1.1，无声 MP4）](https://github.com/cooleryu/spoiler-free-replays/releases/download/v0.1.1-preview/spoiler-free-replays-demo.mp4) · [开始使用](#快速开始) · [当前预览版（v0.1.2）](https://github.com/cooleryu/spoiler-free-replays/releases/tag/v0.1.2-preview) · [反馈问题](https://github.com/cooleryu/spoiler-free-replays/issues/new)
 
 - **隐藏界面中的结果提示**：列表只显示对阵、赛事和日期，不展示比分、封面、视频时长或总局数。
 - **保留观看的悬念**：没有进度条、倍速和弹幕，正片结束后自动接下一局。
@@ -71,6 +71,16 @@ npm start
 ### 能完全保证不被剧透吗？
 
 不能。当前功能隐藏的是界面中的比分、时长、进度条和总局数等提示；视频画面、记分牌和解说本身仍可能透露比赛信息，包括其他场次的结果。
+
+## 一起把防剧透做好
+
+欢迎先看演示，再按上面的步骤运行。现在最需要的是实际使用反馈：**能否顺利打开一场比赛，以及界面里还有哪里会让你猜到结果。**
+
+- **试用或反馈**：到 [Issues](https://github.com/cooleryu/spoiler-free-replays/issues/new) 留下系统、浏览器、你进行的操作、预期结果和实际情况。涉及比赛时写对阵和日期即可，标题不要写比分或胜负，也不要附登录信息。
+- **支持这个方向**：可以给仓库点一个 Star，或把项目和演示转给同样想避开剧透的人。
+- **参与改进**：补充使用说明、报告暴露结果的界面提示，或按 [贡献指南](CONTRIBUTING.md) 提交代码改进。
+
+Want to help? Try the local app and [report an issue](https://github.com/cooleryu/spoiler-free-replays/issues/new): could you open a match, and did any interface detail give away the result? Please include your operating system, browser, steps and what happened. Keep scores and winners out of issue titles. You can also star the repository, share the demo, improve the docs or contribute code through the [contribution guide](CONTRIBUTING.md).
 
 ## 观看方式
 
