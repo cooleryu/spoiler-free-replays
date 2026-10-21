@@ -1,6 +1,6 @@
 {
   "name": "spoiler-free-replays",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -15,7 +15,8 @@
     "build": "npm run typecheck && vite build",
     "bilibili:setup": "node scripts/bilibili-setup.mjs",
     "check:local": "node --import tsx scripts/check-local.ts",
-    "check:agent": "node --import tsx scripts/check-agent.ts"
+    "check:agent": "node --import tsx scripts/check-agent.ts",
+    "catalog:serve": "node --import tsx server/catalog-service.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

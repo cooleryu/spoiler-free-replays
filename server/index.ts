@@ -10,12 +10,21 @@ import { MatchCatalog } from './catalog';
 import { resolvePlayback, ALLOWED_MEDIA_HOST_SUFFIXES } from './playback';
 import { root } from './paths';
 import { ReplayAuth } from './auth';
+import sourceConfig from '../config/source.json';
+import catalogService from '../config/catalog-service.json';
 
 type AuthApi = Pick<ReplayAuth, 'status' | 'headers' | 'start' | 'poll' | 'cancel' | 'logout' | 'close'>;
 const AUTH_ROUTES = new Map<string, 'start' | 'poll' | 'cancel' | 'logout'>([
   ['/api/auth/start', 'start'], ['/api/auth/poll', 'poll'],
   ['/api/auth/cancel', 'cancel'], ['/api/auth/logout', 'logout'],
 ]);
+
+function configuredCatalogUrl(): string | null {
+  // An explicit local override (including an empty value) takes priority over the bundled service.
+  if (process.env.REPLAY_CATALOG_URL !== undefined) return process.env.REPLAY_CATALOG_URL.trim() || null;
+  const fields = ['creatorMid', 'query', 'event', 'year', 'lookbackDays'] as const;
+  return fields.every(field => sourceConfig[field] === catalogService.source[field]) ? catalogService.url : null;
+}
 
 export async function createReplayServer(options: { port?: number; production?: boolean; catalog?: Pick<MatchCatalog, 'get' | 'refresh' | 'watch'>; playback?: typeof resolvePlayback; auth?: AuthApi } = {}) {
   const port = options.port ?? Number(process.env.PORT || 4318);
@@ -24,7 +33,7 @@ export async function createReplayServer(options: { port?: number; production?: 
   let active: AbortController | undefined;
   let finishing: Promise<void> | undefined;
   let vite: ViteDevServer | undefined;
-  const catalog = options.catalog ?? new MatchCatalog();
+  const catalog = options.catalog ?? new MatchCatalog({ catalogUrl: configuredCatalogUrl() });
   const playback = options.playback ?? resolvePlayback;
   const auth = options.auth ?? new ReplayAuth();
   const authRequests = new Map<AbortController, Promise<void>>();

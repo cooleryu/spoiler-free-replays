@@ -1,0 +1,25 @@
+[Unit]
+Description=Spoiler-Free Replays public match directory
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+WorkingDirectory=/opt/spoiler-free-catalog/current
+ExecStart=/usr/bin/env node --import tsx server/catalog-service.ts
+Environment=NODE_ENV=production
+Environment=CATALOG_PORT=4320
+Environment=CATALOG_CACHE_FILE=/var/lib/spoiler-free-catalog/catalog.json
+StateDirectory=spoiler-free-catalog
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=384M
+
+[Install]
+WantedBy=multi-user.target

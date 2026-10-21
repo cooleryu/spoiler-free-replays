@@ -73,8 +73,10 @@ export default function App() {
   useEffect(() => { saveReplay(segments, currentIndex); }, [segments, currentIndex]);
 
   useEffect(() => {
-    void loadCatalog(false);
+    // Let StrictMode discard its first mount before starting a catalog request.
+    const start = setTimeout(() => void loadCatalog(false), 0);
     const stop = () => {
+      clearTimeout(start);
       catalogRequest.current?.abort();
       watchRequest.current?.abort();
       catalogRequest.current = null;
