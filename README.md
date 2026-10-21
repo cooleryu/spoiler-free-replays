@@ -1,10 +1,18 @@
 # 无剧透回放 · Spoiler-Free Replays
 
-选一场比赛，像看直播一样，从第一局看起。
+把悬念留到观看时。
 
-「无剧透回放」在本机运行，首个支持来源是 **B 站英雄联盟赛事**。打开比赛列表，点击刷新，再选择比赛直接观看；不用自行搜索、粘贴链接或输入 BV 号。
+**「无剧透回放」是一个开源、免费的防剧透项目。**
+
+**目前已提供英雄联盟赛事回放功能**，当前视频来源为 B 站。工具在本机运行，隐藏界面中的比分、时长、进度条和总局数等提示。打开比赛列表，点击刷新，再选择比赛直接观看；不用自行搜索、粘贴链接或输入 BV 号。
 
 **本项目开源、免费，不盈利。** 原创代码采用 MIT 许可证，欢迎使用、改进和分享。
+
+A free, open-source project focused on spoiler prevention. Its current feature is a local viewer for League of Legends replays from Bilibili. It hides scores, thumbnails, timelines and total game counts in the interface, then plays games in order. Video footage and commentary can still contain spoilers.
+
+## 当前功能：英雄联盟赛事回放
+
+选一场比赛，像看直播一样，从第一局看起。
 
 <p>
   <a href="docs/images/01-match-list.png"><img src="docs/images/01-match-list.png" width="32%" alt="比赛列表"></a>
@@ -12,9 +20,9 @@
   <a href="docs/images/03-small-seek.png"><img src="docs/images/03-small-seek.png" width="32%" alt="有限跳转"></a>
 </p>
 
-[GitHub 仓库](https://github.com/cooleryu/spoiler-free-replays)
+[GitHub 仓库](https://github.com/cooleryu/spoiler-free-replays) · [观看演示（v0.1.1-preview）](https://github.com/cooleryu/spoiler-free-replays/releases/tag/v0.1.1-preview)
 
-- **不提前透露结果**：列表只显示对阵、赛事和日期，不展示比分、封面、视频时长或总局数。
+- **隐藏界面中的结果提示**：列表只显示对阵、赛事和日期，不展示比分、封面、视频时长或总局数。
 - **保留观看的悬念**：没有进度条、倍速和弹幕，正片结束后自动接下一局。
 - **允许小幅调整**：每次前后跳转 5、30 或 60 秒，保留暂停、音量和全屏。
 
@@ -41,6 +49,28 @@ npm start
 ```
 
 服务只监听本机。可选设置见 [.env.example](.env.example)，需要在启动服务的 shell 中设置；项目不自动读取 `.env`。
+
+## 当前回放功能的常见问题
+
+### 怎么避免英雄联盟回放的进度条和总局数剧透？
+
+当前回放功能不展示进度条、视频时长或总局数，比赛列表也不展示比分和封面。选择比赛后从第一局开始，当前正片结束后才自动接下一局；需要调整位置时，可以小幅前后跳转。
+
+### 可以直接在网页上看，还是需要本地安装？
+
+目前需要按上面的快速开始在自己的电脑上安装并运行，再用浏览器打开本机地址 `http://127.0.0.1:4318`。这是本地运行的应用，尚未提供公共在线使用网址。
+
+### 需要 API Key 或配置 AI 工具吗？
+
+不需要。安装并启动后即可使用当前回放功能；B 站扫码登录是可选的画质提升入口，匿名观看不依赖这一步。播放是否可用及实际画质仍取决于上游返回。
+
+### 目前支持哪些比赛和视频来源？
+
+目前提供英雄联盟赛事回放功能，视频来源为 B 站的英雄联盟赛事官方账号，默认筛选 2026 全球总决赛。当前名单不覆盖完整赛程；修改来源需要确认标题和分局格式兼容，具体见下方“比赛来源与刷新”。
+
+### 能完全保证不被剧透吗？
+
+不能。当前功能隐藏的是界面中的比分、时长、进度条和总局数等提示；视频画面、记分牌和解说本身仍可能透露比赛信息，包括其他场次的结果。
 
 ## 观看方式
 
