@@ -2,62 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createReplayServer } from '../server/index';
 import { ReplayError, type Segment } from '../server/domain';
-import { DEYUNSE_BVID, deyunseMatchId } from '../server/deyunse-catalog';
 
 const PORT = 44320;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const segment: Segment = { bvid: 'BV1P9pq63E1Y', cid: 42710992429, page: 1 };
 const qualities = [{ quality: 64, label: '720P 准高清', available: true, requiresLogin: false, requiresVip: false }];
 const safeUrl = 'https://fixture.bilivideo.com/video.mp4?deadline=1234567890';
-
-test('commentary routes keep the selected clean CID independent of the official catalog', async t => {
-  const port = PORT + 10, origin = `http://127.0.0.1:${port}`;
-  const clean = { bvid: DEYUNSE_BVID, cid: 901, page: 3 };
-  const id = deyunseMatchId(clean.bvid, clean.cid);
-  const directory = { status: 'ready' as const, sourceName: '德云色', updatedAt: null, stale: false,
-    matches: [{ id, date: '2026-10-24', event: 'Fixture event', home: 'AAA', away: 'BBB' }] };
-  let officialCalls = 0, playbackCalls = 0;
-  const app = await createReplayServer({ production: true, port,
-    catalog: {
-      get: async () => { officialCalls++; return { ...directory, sourceName: '官方', matches: [] }; },
-      refresh: async () => { throw new Error('wrong catalog'); },
-      watch: async () => { throw new Error('wrong catalog'); },
-    },
-    deyunseCatalog: {
-      get: async () => directory, refresh: async () => directory,
-      watch: async matchId => {
-        if (matchId !== id) throw new ReplayError('MATCH_UNAVAILABLE');
-        return [clean];
-      },
-    },
-    auth: { status: () => ({ loggedIn: true }), headers: () => ({}),
-      start: async () => { throw new Error('unused'); }, poll: async () => { throw new Error('unused'); },
-      cancel: () => {}, logout: () => {}, close: () => {} },
-    playback: async (selected, _signal, dependencies) => {
-      playbackCalls++;
-      assert.deepEqual(selected, clean);
-      assert.equal(dependencies?.loggedIn, true);
-      assert.equal(dependencies?.quality, 80);
-      return { url: safeUrl, quality: 64, qualities };
-    },
-  });
-  t.after(() => app.close());
-  await app.listen();
-  const post = (path: string, body: unknown) => fetch(`${origin}${path}`, {
-    method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body),
-  });
-  assert.equal((await (await fetch(`${origin}/api/matches`)).json()).sourceName, '官方');
-  assert.deepEqual(await (await fetch(`${origin}/api/matches?source=deyunse`)).json(), directory);
-  assert.deepEqual(await (await post('/api/matches/refresh?source=deyunse', {})).json(), directory);
-  assert.deepEqual(await (await post('/api/watch', { matchId: id })).json(), { status: 'ready', segments: [clean] });
-  // Reordered pages still use the same selected CID and the server's fresh page mapping.
-  assert.equal((await post('/api/playback', { ...clean, page: 1, quality: 80 })).status, 200);
-  assert.equal((await post('/api/playback', { ...clean, cid: 902, quality: 80 })).status, 422);
-  assert.equal((await post('/api/watch', { matchId: `deyunse:${segment.bvid}:901` })).status, 400);
-  assert.equal((await fetch(`${origin}/api/matches?source=unknown`)).status, 404);
-  assert.equal(officialCalls, 1);
-  assert.equal(playbackCalls, 1);
-});
 
 test('playback HTTP resolves only an exact current catalog segment without exposing upstream metadata', async t => {
   let sourceCalls = 0;
@@ -84,6 +34,15 @@ test('playback HTTP resolves only an exact current catalog segment without expos
   await app.listen();
   const post = (body: unknown, origin = ORIGIN) => fetch(`${ORIGIN}/api/playback`, {
     method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  await t.test('unsupported catalogs and nonofficial match identifiers are rejected', async () => {
+    assert.equal((await fetch(`${ORIGIN}/api/matches?source=unknown`)).status, 404);
+    const response = await fetch(`${ORIGIN}/api/watch`, {
+      method: 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ matchId: `collection:${segment.bvid}:901` }),
+    });
+    assert.equal(response.status, 400);
+    assert.equal(sourceCalls, 0);
   });
   await t.test('foreign origins and malformed or extra playback identities never resolve a source', async () => {
     assert.equal((await post(segment, 'https://evil.example')).status, 403);

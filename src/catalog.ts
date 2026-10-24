@@ -1,7 +1,5 @@
 import type { Segment } from './storage';
 
-export type CatalogSource = 'official' | 'deyunse';
-
 export interface Match {
   id: string;
   date: string;
@@ -21,11 +19,11 @@ export interface Catalog {
 
 export function activeMatchForSegment(matches: Match[], segment?: Segment): Match | undefined {
   if (!segment) return;
-  return matches.find(match => match.id === segment.bvid || match.id === `deyunse:${segment.bvid}:${segment.cid}`);
+  return matches.find(match => match.id === segment.bvid);
 }
 
-export async function requestCatalog(source: CatalogSource, refresh: boolean, signal: AbortSignal, fetcher: typeof fetch = fetch) {
-  const address = `${refresh ? '/api/matches/refresh' : '/api/matches'}${source === 'deyunse' ? '?source=deyunse' : ''}`;
+export async function requestCatalog(refresh: boolean, signal: AbortSignal, fetcher: typeof fetch = fetch) {
+  const address = refresh ? '/api/matches/refresh' : '/api/matches';
   for (let attempt = 0; ; attempt++) {
     signal.throwIfAborted();
     const response = await fetcher(address, {

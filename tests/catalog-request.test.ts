@@ -5,18 +5,16 @@ import { activeMatchForSegment, requestCatalog, type Match } from '../src/catalo
 const bvid = 'BV1xx411c7mD';
 const match = (id: string): Match => ({ id, date: '2026-10-24', event: '赛事', home: 'AAA', away: 'BBB' });
 
-test('separate matches within one BV resolve by CID instead of the upload alone', () => {
-  const first = match(`deyunse:${bvid}:101`);
-  const second = match(`deyunse:${bvid}:202`);
-  assert.equal(activeMatchForSegment([first, second], { bvid, cid: 202, page: 4 }), second);
-  assert.equal(activeMatchForSegment([first], { bvid, cid: 202, page: 4 }), undefined);
+test('the active match is resolved from the official upload identifier', () => {
   const official = match(bvid);
   assert.equal(activeMatchForSegment([official], { bvid, cid: 202, page: 4 }), official);
+  assert.equal(activeMatchForSegment([], { bvid, cid: 202, page: 4 }), undefined);
+  assert.equal(activeMatchForSegment([official]), undefined);
 });
 
-test('source switching retries a cancelling server request without falling back to another source', async () => {
+test('catalog refresh retries while a cancelled server request releases its slot', async () => {
   const requests: Array<{ url: string; method?: string; body?: BodyInit | null }> = [];
-  const result = await requestCatalog('deyunse', true, new AbortController().signal, (async (url, options) => {
+  const result = await requestCatalog(true, new AbortController().signal, (async (url, options) => {
     requests.push({ url: String(url), method: options?.method, body: options?.body });
     return requests.length === 1
       ? Response.json({ status: 'error', code: 'BUSY' }, { status: 409 })
@@ -24,13 +22,13 @@ test('source switching retries a cancelling server request without falling back 
   }) as typeof fetch);
   assert.equal(result.ok, true);
   assert.equal(requests.length, 2);
-  assert.ok(requests.every(request => request.url === '/api/matches/refresh?source=deyunse' && request.method === 'POST' && request.body === '{}'));
+  assert.ok(requests.every(request => request.url === '/api/matches/refresh' && request.method === 'POST' && request.body === '{}'));
 });
 
-test('a superseded catalog response is rejected before it can replace the selected source', async () => {
+test('a cancelled catalog response is rejected before it can replace the current list', async () => {
   const controller = new AbortController();
-  const reason = new Error('selection changed');
-  await assert.rejects(requestCatalog('official', false, controller.signal, (async () => {
+  const reason = new Error('request cancelled');
+  await assert.rejects(requestCatalog(false, controller.signal, (async () => {
     controller.abort(reason);
     return Response.json({ status: 'ready', matches: [] });
   }) as typeof fetch), error => error === reason);

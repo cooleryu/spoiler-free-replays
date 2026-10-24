@@ -230,9 +230,3 @@ kbd { font-family: inherit; font-size: 13px; line-height: 21px; text-align: cent
   .quality-picker-menu { width: 218px; }
   .quality-picker-option { gap: 8px; padding-inline: 8px; font-size: 14px; }
 }
-
-
-.source-switch { display: inline-flex; flex-shrink: 0; gap: 3px; padding: 3px; border-radius: 6px; background: #eaeae6; }
-.source-switch button { min-height: 38px; padding: 7px 16px; border: 0; border-radius: 4px; background: transparent; color: #686b6d; font-size: 15px; white-space: nowrap; }
-.source-switch button:hover { color: #202122; }
-.source-switch button[aria-pressed="true"] { background: #fafaf8; color: #202122; box-shadow: 0 1px 3px #00000012; }

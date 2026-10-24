@@ -7,7 +7,6 @@ import { z } from 'zod';
 import { allowedRequest, json, readJson } from './http';
 import { BVID, ReplayError, errorCode, segmentSchema } from './domain';
 import { MatchCatalog } from './catalog';
-import { DeyunseCatalog, deyunseMatchId, isDeyunseMatchId, isDeyunseVideo } from './deyunse-catalog';
 import { resolvePlayback, ALLOWED_MEDIA_HOST_SUFFIXES } from './playback';
 import { root } from './paths';
 import { ReplayAuth } from './auth';
@@ -28,7 +27,7 @@ function configuredCatalogUrl(): string | null {
   return fields.every(field => sourceConfig[field] === catalogService.source[field]) ? catalogService.url : null;
 }
 
-export async function createReplayServer(options: { port?: number; production?: boolean; catalog?: Pick<MatchCatalog, 'get' | 'refresh' | 'watch'>; deyunseCatalog?: Pick<DeyunseCatalog, 'get' | 'refresh' | 'watch'>; playback?: typeof resolvePlayback; auth?: AuthApi } = {}) {
+export async function createReplayServer(options: { port?: number; production?: boolean; catalog?: Pick<MatchCatalog, 'get' | 'refresh' | 'watch'>; playback?: typeof resolvePlayback; auth?: AuthApi } = {}) {
   const port = options.port ?? Number(process.env.PORT || 4318);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid port');
   const timeoutMs = Math.min(60_000, Math.max(1000, Number(process.env.REPLAY_TIMEOUT_MS) || 45_000));
@@ -36,7 +35,6 @@ export async function createReplayServer(options: { port?: number; production?: 
   let finishing: Promise<void> | undefined;
   let vite: ViteDevServer | undefined;
   const catalog = options.catalog ?? new MatchCatalog({ catalogUrl: configuredCatalogUrl() });
-  const deyunseCatalog = options.deyunseCatalog ?? new DeyunseCatalog();
   const playback = options.playback ?? resolvePlayback;
   const auth = options.auth ?? new ReplayAuth();
   const mediaRelay = createMediaRelay();
@@ -88,8 +86,7 @@ export async function createReplayServer(options: { port?: number; production?: 
       try { await work; } finally { authRequests.delete(controller); }
       return;
     }
-    const catalogRoute = req.url?.match(/^\/api\/matches(\/refresh)?(?:\?source=(official|deyunse))?$/);
-    const selectedCatalog = catalogRoute?.[2] === 'deyunse' ? deyunseCatalog : catalog;
+    const catalogRoute = req.url?.match(/^\/api\/matches(\/refresh)?(?:\?source=official)?$/);
     const operation = catalogRoute && !catalogRoute[1] && req.method === 'GET' ? 'get'
       : catalogRoute?.[1] && req.method === 'POST' ? 'refresh'
       : req.url === '/api/watch' && req.method === 'POST' ? 'watch'
@@ -103,26 +100,20 @@ export async function createReplayServer(options: { port?: number; production?: 
       finishing = (async () => {
         try {
           let result;
-          if (operation === 'get') result = await selectedCatalog.get(controller.signal);
+          if (operation === 'get') result = await catalog.get(controller.signal);
           else if (operation === 'refresh') {
             if (!z.object({}).strict().safeParse(await readJson(req)).success) throw new ReplayError('INVALID_INPUT');
-            result = await selectedCatalog.refresh(controller.signal);
+            result = await catalog.refresh(controller.signal);
           } else if (operation === 'watch') {
-            const body = z.object({ matchId: z.string().max(100).refine(id => BVID.test(id) || isDeyunseMatchId(id)) }).strict().safeParse(await readJson(req));
+            const body = z.object({ matchId: z.string().max(100).regex(BVID) }).strict().safeParse(await readJson(req));
             if (!body.success) throw new ReplayError('INVALID_INPUT');
-            const target = isDeyunseMatchId(body.data.matchId) ? deyunseCatalog : catalog;
-            result = { status: 'ready', segments: await target.watch(body.data.matchId, controller.signal) };
+            result = { status: 'ready', segments: await catalog.watch(body.data.matchId, controller.signal) };
           } else {
             const body = segmentSchema.extend({ quality: z.number().int().refine(value => [16, 32, 64, 74, 80, 112, 116, 120, 125, 126, 127].includes(value)).optional() }).strict().safeParse(await readJson(req));
             if (!body.success) throw new ReplayError('INVALID_INPUT');
-            const commentary = isDeyunseVideo(body.data.bvid);
-            const verified = commentary
-              ? await deyunseCatalog.watch(deyunseMatchId(body.data.bvid, body.data.cid), controller.signal)
-              : await catalog.watch(body.data.bvid, controller.signal);
-            // A collection may reorder its parts. CID identifies the selected clean recording;
-            // use the freshly verified page rather than the client's old position in the collection.
+            const verified = await catalog.watch(body.data.bvid, controller.signal);
             const selectedSegment = verified.find(segment => segment.bvid === body.data.bvid && segment.cid === body.data.cid
-              && (commentary || segment.page === body.data.page));
+              && segment.page === body.data.page);
             if (!selectedSegment) throw new ReplayError('MATCH_UNAVAILABLE');
             const loggedIn = auth.status().loggedIn;
             if ((body.data.quality ?? 64) > 64 && !loggedIn) throw new ReplayError('BILIBILI_LOGIN');

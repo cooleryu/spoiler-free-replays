@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { cleanSegments, restoreReplay, saveReplay, validSegments, type Segment } from './storage';
-import { activeMatchForSegment, matchDate, readCatalog, requestCatalog, updateTime, type Catalog, type CatalogSource, type Match } from './catalog';
+import { activeMatchForSegment, matchDate, readCatalog, requestCatalog, updateTime, type Catalog, type Match } from './catalog';
 import Player from './Player';
 import Auth from './Auth';
 
@@ -13,11 +13,6 @@ interface ReplayState {
 
 const EMPTY_REPLAY: ReplayState = { phase: 'idle', segments: [], currentIndex: 0 };
 const EMPTY_CATALOG: Catalog = { sourceName: '指定赛事账号', matches: [], updatedAt: null, stale: false };
-const SOURCE_KEY = 'spoiler-free-replays.source.v1';
-function restoreSource(): CatalogSource {
-  try { return localStorage.getItem(SOURCE_KEY) === 'deyunse' ? 'deyunse' : 'official'; }
-  catch { return 'official'; }
-}
 const ERRORS: Record<string, string> = {
   SOURCE_UNAVAILABLE: '暂时无法获取比赛列表，请稍后刷新。',
   RATE_LIMITED: 'B 站暂时限制了公开检索，请稍后再刷新。',
@@ -66,7 +61,6 @@ export default function App() {
     return saved ? { ...saved, phase: 'ready' } : EMPTY_REPLAY;
   });
   const [catalog, setCatalog] = useState<Catalog>(EMPTY_CATALOG);
-  const [source, setSource] = useState<CatalogSource>(restoreSource);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
   const [watchError, setWatchError] = useState('');
@@ -103,14 +97,14 @@ export default function App() {
     };
   }, []);
 
-  async function loadCatalog(refresh: boolean, selectedSource: CatalogSource = source) {
+  async function loadCatalog(refresh: boolean) {
     catalogRequest.current?.abort();
     const controller = new AbortController();
     catalogRequest.current = controller;
     setCatalogLoading(true);
     setCatalogError('');
     try {
-      const { ok, result } = await requestCatalog(selectedSource, refresh, controller.signal);
+      const { ok, result } = await requestCatalog(refresh, controller.signal);
       if (controller.signal.aborted || catalogRequest.current !== controller) return;
       const next = ok ? readCatalog(result) : null;
       if (next) {
@@ -129,16 +123,6 @@ export default function App() {
         setCatalogLoading(false);
       }
     }
-  }
-
-  function selectSource(next: CatalogSource) {
-    if (next === source || phase !== 'idle') return;
-    setSource(next);
-    try { localStorage.setItem(SOURCE_KEY, next); } catch { /* The selection still works for this visit. */ }
-    setCatalog(EMPTY_CATALOG);
-    setWatchError('');
-    setPlaybackMessage('');
-    void loadCatalog(false, next);
   }
 
   async function watch(match: Match) {
@@ -206,7 +190,7 @@ export default function App() {
             <div className="catalog-content">
               <div className="catalog-heading"><div><p className="eyebrow">近期比赛</p><h1>比赛回放</h1></div><p className="viewer-description">选一场，从第一局开始。</p></div>
               <div className="catalog-toolbar">
-                <div className="catalog-status"><div className="source-switch" role="group" aria-label="解说来源"><button type="button" aria-pressed={source === 'official'} onClick={() => selectSource('official')}>官方</button><button type="button" aria-pressed={source === 'deyunse'} onClick={() => selectSource('deyunse')}>德云色</button></div><span className="update-label" role="status">{catalog.updatedAt ? `${catalog.bundled ? '内置名单 · 核验于' : '更新于'} ${updateTime(catalog.updatedAt)}` : catalogLoading ? '正在获取近期比赛…' : '尚未获取比赛列表'}</span></div>
+                <div className="catalog-status"><span className="update-label" role="status">{catalog.updatedAt ? `${catalog.bundled ? '内置名单 · 核验于' : '更新于'} ${updateTime(catalog.updatedAt)}` : catalogLoading ? '正在获取近期比赛…' : '尚未获取比赛列表'}</span></div>
                 <button className="refresh-button" type="button" disabled={catalogLoading} onClick={() => void loadCatalog(true)}><Icon name="refresh" className={catalogLoading ? 'is-spinning' : ''} />{catalogLoading ? '更新中' : '刷新'}</button>
               </div>
               {listError && <p className="error-message" role="alert">{listError}{catalog.matches.length > 0 && !watchError ? ' 已保留现有列表。' : ''}</p>}
