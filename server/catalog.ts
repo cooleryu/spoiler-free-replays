@@ -137,7 +137,7 @@ export function normalizeSearch(raw: unknown, now = Date.now(), config: SourceCo
     if (!match || match.date > shanghaiDate(now)) continue;
     byId.set(match.id, { ...match, publishedAt: row.data.pubdate });
   }
-  return [...byId.values()].sort((a, b) => b.publishedAt - a.publishedAt || a.id.localeCompare(b.id));
+  return [...byId.values()].sort((a, b) => b.publishedAt - a.publishedAt || a.id.localeCompare(b.id)).slice(0, 50);
 }
 
 function gameNumber(title: string): number | null {
@@ -157,6 +157,11 @@ export function matchSegments(raw: unknown, selected: Match, config: SourceConfi
   try { metadata = parseMetadata({ bvid: selected.id, title: video.data.title,
     pages: video.data.pages.map(p => ({ page: p.page, cid: p.cid, title: p.part })) }, selected.id); }
   catch { throw new ReplayError('MATCH_UNAVAILABLE'); }
+  // Some verified single-page uploads retain the platform's exact default label.
+  const onlyPage = metadata.pages.length === 1 ? metadata.pages[0] : undefined;
+  if (onlyPage && /^(?:P1|p1|视频1|video1)$/.test(onlyPage.title)) {
+    return [{ bvid: selected.id, cid: onlyPage.cid, page: onlyPage.page }];
+  }
   // Verified uploads label games 第一局...; commentary, interviews and draw ceremonies are not games.
   // Unknown parts fail closed instead of silently pretending we know whether a game is missing.
   if (metadata.pages.some(p => gameNumber(p.title) === null && !/^(赛后采访|赛前评论|瑞士轮抽签|赛前节目|赛前分析|开场|颁奖仪式)$/.test(p.title.trim()))) throw new ReplayError('MATCH_UNAVAILABLE');
@@ -177,9 +182,22 @@ function sourceFailure(error: unknown, signal: AbortSignal): ReplayError {
 export function createPublicSource(config: SourceConfig = sourceConfig): PublicSource {
   return {
     // Fixed public endpoint and local query. No cookies, browser, login, arbitrary URL or model execution.
-    videos: signal => fetchWithoutWBI('/x/web-interface/wbi/search/type', {
-      search_type: 'video', keyword: config.query, page: 1, page_size: 50, order: 'pubdate', duration: 4,
-    }, {}, signal),
+    videos: async signal => {
+      // Shorter official match uploads must not disappear behind a duration filter.
+      // Read at most two pages; keep the existing author/title checks and 50-match output cap.
+      const result: unknown[] = [];
+      for (let page = 1; page <= 2; page++) {
+        const raw = await fetchWithoutWBI('/x/web-interface/wbi/search/type', {
+          search_type: 'video', keyword: config.query, page, page_size: 50, order: 'pubdate', duration: 0,
+        }, {}, signal);
+        if (raw && typeof raw === 'object' && 'v_voucher' in raw) throw new ReplayError('RATE_LIMITED');
+        const parsed = z.object({ result: z.array(z.unknown()).max(50) }).safeParse(raw);
+        if (!parsed.success) throw new ReplayError('SOURCE_UNAVAILABLE');
+        result.push(...parsed.data.result);
+        if (parsed.data.result.length < 50) break;
+      }
+      return { result };
+    },
     video: (bvid, signal) => fetchWithoutWBI('/x/web-interface/view', { bvid }, {}, signal),
   };
 }

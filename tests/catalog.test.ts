@@ -306,6 +306,28 @@ test('verified game segments exclude interviews and contain only playback identi
   assert.doesNotMatch(JSON.stringify(result), /title|part|stat|duration|desc|owner|赛后采访|Result/);
 });
 
+test('single-page default labels accept only the exact verified placeholder forms', () => {
+  for (const part of ['P1', 'p1', '视频1', 'video1']) {
+    const result = matchSegments(metadata({ pages: [{ page: 1, cid: 1001, part }] }), selected, config);
+    assert.deepEqual(result, [{ bvid: A, cid: 1001, page: 1 }]);
+    assert.deepEqual(Object.keys(result[0]).sort(), ['bvid', 'cid', 'page']);
+  }
+});
+
+test('single-page default labels still require verified metadata and reject ambiguous parts', () => {
+  const pages = [{ page: 1, cid: 1001, part: 'P1' }];
+  for (const overrides of [
+    { owner: { mid: config.creatorMid + 1 } }, { bvid: B }, { title: 'unverified upload' },
+    { pages: [{ ...pages[0], page: 2 }] }, { pages: [{ ...pages[0], cid: -1 }] },
+  ]) assert.throws(() => matchSegments(metadata({ pages, ...overrides }), selected, config), code('MATCH_UNAVAILABLE'));
+  for (const part of ['P', 'p', '视频', 'video', 'P2', 'P01', 'P 1', ' P1', 'P1 ', 'Video1', 'recording.mp4', '赛后采访', '瑞士轮抽签']) {
+    assert.throws(() => matchSegments(metadata({ pages: [{ ...pages[0], part }] }), selected, config), code('MATCH_UNAVAILABLE'));
+  }
+  for (const extra of ['第一局', 'P1', '赛后采访']) {
+    assert.throws(() => matchSegments(metadata({ pages: [...pages, { page: 2, cid: 1002, part: extra }] }), selected, config), code('MATCH_UNAVAILABLE'));
+  }
+});
+
 test('game parts are sorted numerically by their verified game labels, preserving their actual P numbers', () => {
   const pages = [
     { page: 3, cid: 1003, part: '第二局' },

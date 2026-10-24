@@ -1,3 +1,7 @@
+import type { Segment } from './storage';
+
+export type CatalogSource = 'official' | 'deyunse';
+
 export interface Match {
   id: string;
   date: string;
@@ -13,6 +17,35 @@ export interface Catalog {
   matches: Match[];
   warning?: string;
   bundled?: boolean;
+}
+
+export function activeMatchForSegment(matches: Match[], segment?: Segment): Match | undefined {
+  if (!segment) return;
+  return matches.find(match => match.id === segment.bvid || match.id === `deyunse:${segment.bvid}:${segment.cid}`);
+}
+
+export async function requestCatalog(source: CatalogSource, refresh: boolean, signal: AbortSignal, fetcher: typeof fetch = fetch) {
+  const address = `${refresh ? '/api/matches/refresh' : '/api/matches'}${source === 'deyunse' ? '?source=deyunse' : ''}`;
+  for (let attempt = 0; ; attempt++) {
+    signal.throwIfAborted();
+    const response = await fetcher(address, {
+      ...(refresh ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' } : {}), signal,
+    });
+    const result: unknown = await response.json();
+    signal.throwIfAborted();
+    // A cancelled request can take a moment to release the local server's request slot.
+    if (attempt < 3 && response.status === 409 && result && typeof result === 'object'
+      && (result as Record<string, unknown>).code === 'BUSY') {
+      await new Promise<void>((resolve, reject) => {
+        const cancel = () => { clearTimeout(timer); reject(signal.reason); };
+        const timer = setTimeout(() => { signal.removeEventListener('abort', cancel); resolve(); }, 250);
+        signal.addEventListener('abort', cancel, { once: true });
+        if (signal.aborted) cancel();
+      });
+      continue;
+    }
+    return { ok: response.ok, result };
+  }
 }
 
 function shortText(value: unknown, limit: number): value is string {

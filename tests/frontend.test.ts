@@ -29,7 +29,9 @@ test('the initial screen provides the fixed-source list and an optional login ac
   const html = render();
   assert.match(html, /<main>/);
   assert.match(html, /<h1>比赛回放<\/h1>/);
-  assert.match(html, /指定赛事账号/);
+  assert.match(html, /aria-label="解说来源"/);
+  assert.match(html, /aria-pressed="true">官方/);
+  assert.match(html, /aria-pressed="false">德云色/);
   assert.match(html, /公开检索可能有收录延迟/);
   assert.match(html, /正在获取近期比赛/);
   assert.match(html, /<button[^>]*class="refresh-button"[^>]*disabled=""/);
