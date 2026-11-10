@@ -8,9 +8,11 @@ Run `npm ci --ignore-scripts`, then `npm run catalog:serve` with Node.js 24.
 The service listens on `127.0.0.1:4320`. An existing HTTPS reverse proxy should
 expose only this directory route. Keep the ordinary local app private.
 
-Successful upstream results are shared for five minutes. Concurrent refreshes
-share one request. On failure, the previous snapshot and its original timestamp
-remain visible with a warning, and retries are limited to once per thirty seconds.
+The configured Bilibili series supplies the official replay list. Successful
+results are shared for five minutes and concurrent refreshes share one request.
+If the source fails or returns no recent matches while a recent list is available,
+the previous list and its original timestamp remain visible with a warning.
+Failed refreshes are retried at most once per thirty seconds.
 There is no background timer or paid AI dependency.
 
 `spoiler-free-catalog.service` is an example systemd unit. Its installation uses

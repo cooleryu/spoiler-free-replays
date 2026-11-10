@@ -8,7 +8,6 @@ import {
   type Match, type PublicSource, type SourceConfig,
 } from '../server/catalog';
 import { ReplayError, type ErrorCode } from '../server/domain';
-import worldsSeed from '../config/catalog.seed.json';
 
 // Offline fixtures use public API field names and the titles visible in the supplied account screenshot.
 // They do not claim a live fetch, current availability, or successful player playback.
@@ -49,6 +48,11 @@ const worldsVideo = {
   ],
 };
 const worldsMatch: Match = { id: worldsVideo.bvid, date: '2026-10-16', event: worldsConfig.event, home: 'FUR', away: 'MVK' };
+const worldsSeed = {
+  version: 1, creatorMid: worldsConfig.creatorMid, query: worldsConfig.query,
+  updatedAt: new Date(WORLDS_NOW).toISOString(),
+  matches: [{ ...worldsMatch, publishedAt: worldsVideo.pubdate }],
+};
 function metadata(overrides: Record<string, unknown> = {}) {
   return {
     bvid: A, title: title(), owner: { mid: config.creatorMid, name: config.sourceName },
@@ -123,9 +127,12 @@ test('captured anonymous API field shapes yield the four observed recent matches
   ]);
 });
 
-test('verified Worlds metadata uses the existing exact title grammar and excludes pre-match commentary', () => {
+test('verified Worlds metadata uses the existing exact title grammar and skips commentary and highlight parts', () => {
   assert.deepEqual(parseMatchTitle(worldsVideo.title, worldsVideo.bvid, worldsConfig), worldsMatch);
-  assert.deepEqual(matchSegments(worldsVideo, worldsMatch, worldsConfig), [
+  const withHighlights = { ...worldsVideo, pages: [...worldsVideo.pages,
+    { page: 6, cid: 1006, part: '赛事速看' }, { page: 7, cid: 1007, part: 'TOP' }, { page: 8, cid: 1008, part: 'TOP5' },
+  ] };
+  assert.deepEqual(matchSegments(withHighlights, worldsMatch, worldsConfig), [
     { bvid: worldsVideo.bvid, cid: 42778036035, page: 1 },
     { bvid: worldsVideo.bvid, cid: 42778689843, page: 2 },
     { bvid: worldsVideo.bvid, cid: 42779412249, page: 3 },
@@ -156,19 +163,18 @@ test('the verified latest Worlds match excludes only the exact Swiss draw ceremo
   }
 });
 
-test('the bundled verified directory is explicitly stale, date-bounded and revalidated on watch', async () => {
+test('the bundled verified directory is explicitly stale, date-bounded and revalidated on watch', async t => {
+  const seedFile = await tempCache(t);
+  await writeFile(seedFile, JSON.stringify(worldsSeed));
   const source = new FakeSource();
   source.details = worldsVideo;
   let now = WORLDS_NOW;
-  const catalog = new MatchCatalog({ source, config: worldsConfig, cacheFile: null, now: () => now });
+  const catalog = new MatchCatalog({ source, config: worldsConfig, cacheFile: null, seedFile, now: () => now });
   const result = await catalog.get(signal());
   assert.equal(result.bundled, true);
   assert.equal(result.stale, true);
   assert.equal(result.updatedAt, worldsSeed.updatedAt);
-  assert.deepEqual(result.matches.map(m => [m.id, m.home, m.away]), [
-    ['BV1STnL6LEiW', 'KC', 'MVK'], ['BV15VJ66sEvH', 'MVK', 'FUR'], ['BV1LoJh6PENc', 'C9', 'FUR'],
-    ['BV1y8JS6eEtZ', 'FUR', 'MVK'], ['BV1qrJm6EE6J', 'C9', 'KC'],
-  ]);
+  assert.deepEqual(result.matches, [worldsMatch]);
   assert.equal(source.videoListCalls, 0);
   assert.equal((await catalog.watch(worldsVideo.bvid, signal()))[0].cid, 42778036035);
   source.details = { ...worldsVideo, owner: { mid: 1 } };
@@ -178,12 +184,23 @@ test('the bundled verified directory is explicitly stale, date-bounded and reval
   await assert.rejects(catalog.watch(worldsVideo.bvid, signal()), code('MATCH_UNAVAILABLE'));
 });
 
-test('blocked refresh retains bundled provenance; successful refresh clears it and persists a normal cache', async t => {
+test('empty and blocked refreshes keep the bundled list until a usable update arrives', async t => {
   const cacheFile = await tempCache(t);
+  const seedFile = await tempCache(t);
+  await writeFile(seedFile, JSON.stringify(worldsSeed));
+  await writeFile(cacheFile, JSON.stringify({ ...worldsSeed, matches: [] }));
   const source = new FakeSource();
   let now = WORLDS_NOW;
-  const catalog = new MatchCatalog({ source, config: worldsConfig, cacheFile, now: () => now });
+  const catalog = new MatchCatalog({ source, config: worldsConfig, cacheFile, seedFile, now: () => now });
   const first = await catalog.get(signal());
+  assert.deepEqual(first.matches, [worldsMatch]);
+  source.result = { result: [] };
+  const empty = await catalog.refresh(signal());
+  assert.equal(empty.bundled, true);
+  assert.equal(empty.warning, 'SOURCE_UNAVAILABLE');
+  assert.equal(empty.updatedAt, first.updatedAt);
+  assert.deepEqual(empty.matches, first.matches);
+  now += 3000;
   source.result = { v_voucher: 'synthetic-verification' };
   const blocked = await catalog.refresh(signal());
   assert.equal(blocked.bundled, true);

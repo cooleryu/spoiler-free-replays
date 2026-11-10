@@ -34,6 +34,8 @@ A free, open-source project for spoiler-free viewing, starting with League of Le
 
 点击「刷新」获取官方比赛列表，再点击想看的对阵即可。**首页也会自动加载一次名单，已经有比赛时可以直接点开。** 不用搜索视频、粘贴链接或输入 BV 号。
 
+如果你之前下载过项目，请更新到最新版再启动。Git 用户可运行 `git pull`，ZIP 用户可重新下载上方的项目 ZIP。新版从官方赛事系列获取近七天的回放，点开比赛时会跳过集锦和采访。
+
 <details>
 <summary>自己手动启动</summary>
 

@@ -8,6 +8,7 @@ import { localDir, root } from './paths';
 
 export interface SourceConfig {
   creatorMid: number; sourceName: string; query: string; event: string; year: number; lookbackDays: number;
+  seriesId?: number;
 }
 export interface Match {
   id: string; date: string; event: string; home: string; away: string;
@@ -162,9 +163,10 @@ export function matchSegments(raw: unknown, selected: Match, config: SourceConfi
   if (onlyPage && /^(?:P1|p1|视频1|video1)$/.test(onlyPage.title)) {
     return [{ bvid: selected.id, cid: onlyPage.cid, page: onlyPage.page }];
   }
-  // Verified uploads label games 第一局...; commentary, interviews and draw ceremonies are not games.
+  // Verified uploads label games 第一局...; skip the official recap and highlight parts too.
   // Unknown parts fail closed instead of silently pretending we know whether a game is missing.
-  if (metadata.pages.some(p => gameNumber(p.title) === null && !/^(赛后采访|赛前评论|瑞士轮抽签|赛前节目|赛前分析|开场|颁奖仪式)$/.test(p.title.trim()))) throw new ReplayError('MATCH_UNAVAILABLE');
+  const supplementaryPart = /^(赛后采访|赛前评论|瑞士轮抽签|赛前节目|赛前分析|开场|颁奖仪式|赛事速看|TOP\d{0,2})$/i;
+  if (metadata.pages.some(p => gameNumber(p.title) === null && !supplementaryPart.test(p.title.trim()))) throw new ReplayError('MATCH_UNAVAILABLE');
   const games = metadata.pages.filter(p => gameNumber(p.title) !== null)
     .sort((a, b) => gameNumber(a.title)! - gameNumber(b.title)!);
   if (!games.length || games.some((p, index) => gameNumber(p.title) !== index + 1)) throw new ReplayError('MATCH_UNAVAILABLE');
@@ -179,10 +181,36 @@ function sourceFailure(error: unknown, signal: AbortSignal): ReplayError {
   return new ReplayError('SOURCE_UNAVAILABLE');
 }
 
+async function seriesVideos(mid: number, seriesId: number, signal: AbortSignal): Promise<unknown> {
+  const pageSize = 20;
+  const result: unknown[] = [];
+  const archive = z.object({ upMid: z.literal(mid), bvid: z.string(), title: z.string(), pubdate: z.number() });
+  for (let page = 1; page <= 5; page++) {
+    const raw = await fetchWithoutWBI('/x/series/archives', {
+      mid, series_id: seriesId, only_normal: 'true', sort: 'desc', pn: page, ps: pageSize,
+    }, {}, signal);
+    if (raw && typeof raw === 'object' && 'v_voucher' in raw) throw new ReplayError('RATE_LIMITED');
+    const parsed = z.object({
+      page: z.object({ num: z.literal(page), size: z.literal(pageSize), total: z.number().int().nonnegative() }),
+      archives: z.array(z.unknown()).max(pageSize),
+    }).safeParse(raw);
+    if (!parsed.success) throw new ReplayError('SOURCE_UNAVAILABLE');
+    for (const value of parsed.data.archives) {
+      const row = archive.safeParse(value);
+      if (!row.success) continue;
+      const { upMid, bvid, title, pubdate } = row.data;
+      result.push({ mid: upMid, bvid, title, pubdate });
+    }
+    if (page * pageSize >= parsed.data.page.total || parsed.data.archives.length === 0) break;
+  }
+  return { result };
+}
+
 export function createPublicSource(config: SourceConfig = sourceConfig): PublicSource {
   return {
     // Fixed public endpoint and local query. No cookies, browser, login, arbitrary URL or model execution.
     videos: async signal => {
+      if (config.seriesId !== undefined) return seriesVideos(config.creatorMid, config.seriesId, signal);
       // Shorter official match uploads must not disappear behind a duration filter.
       // Read at most two pages; keep the existing author/title checks and 50-match output cap.
       const result: unknown[] = [];
@@ -235,16 +263,16 @@ export class MatchCatalog {
   }
   private async load() {
     this.loaded ??= (async () => {
+      const cutoff = recentCutoff(this.now, this.config.lookbackDays) / 1000;
       const cached = await this.readSnapshot(this.cacheFile);
-      if (cached) {
-        this.snapshot = cached;
-        this.bundled = Boolean(cached.bundled);
-        this.sourceStale = cached.stale;
-        this.lastWarning = cached.warning;
-        return;
-      }
-      this.snapshot = await this.readSnapshot(this.seedFile);
-      this.bundled = Boolean(this.snapshot);
+      const hasRecentCache = cached?.matches.some(match => match.publishedAt >= cutoff);
+      const seed = hasRecentCache ? undefined : await this.readSnapshot(this.seedFile);
+      const useSeed = Boolean(seed && (!cached || seed.matches.some(match => match.publishedAt >= cutoff)));
+      const selected = useSeed ? seed : cached;
+      this.snapshot = selected;
+      this.bundled = useSeed || Boolean(selected?.bundled);
+      this.sourceStale = selected?.stale ?? false;
+      this.lastWarning = selected?.warning;
     })();
     await this.loaded;
   }
@@ -300,6 +328,11 @@ export class MatchCatalog {
           const raw = await this.source.videos(signal);
           snapshot = { version: 1, creatorMid: this.config.creatorMid, query: this.config.query,
             updatedAt: new Date(this.now).toISOString(), matches: normalizeSearch(raw, this.now, this.config) };
+        }
+        const cutoff = recentCutoff(this.now, this.config.lookbackDays) / 1000;
+        if (!snapshot.matches.some(match => match.publishedAt >= cutoff)
+            && this.snapshot?.matches.some(match => match.publishedAt >= cutoff)) {
+          throw new ReplayError('SOURCE_UNAVAILABLE');
         }
         if (signal.aborted) throw new ReplayError('CANCELLED');
         if (this.cacheFile) {
